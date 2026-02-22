@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "atmanclinic",
+  "private_key_id": "22e351f1b829ab7dead6b8109980aea0d6dcf667",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDVxxaVxr5AyX6f\n80Cj19gfnhCgiCkedCWNxxLDpbb+Cj+smc8DSyhP76c/YQ3vW3vhD7/1qbZDCSjL\nrxKfTFi4EZoesbsE8FTZvhUN2ICFYrv4Jw5wYxVjgKGqA0G9UDAYanb11ZbvhQqi\ncgzh0dAAkVZV1Rk6yRYcyplgiU0kC4KyfIDx4Sm1R7zbfBraXVCJesG6YDL5peAK\niYxyg5HO5zbS0iiyxP+oSHVzRmTczQW9dLG/zl9m9FGemjBHByDYUdoYIVmkR2V+\n9pK5G8C0xH3YscjoAdxsLV/HkujECj4r3oAPp90115xj2Ll+JHY1lCMhbE5qGGsW\nqJXuXkTtAgMBAAECggEAHa+jnIFoho0kixgnvAjbb4qO4wf9c8frthw0qBwRRQZN\n0M1cEKhFbRJJzpSO75Pr6DU8ciQS1gzF0EEbzCi5Mjhph0UlhBpOoh0SBeXwdPVg\nxmVADU3JGNPyPy5sGNqzjxRruBgkuVangybk0JAG+ykzjMBGnGHzsuRUd7IhVvWM\nQZsIISf0fpgDEryCgiwwmAGA2xSAuCHxcUwU1jB5zJXL//WTimQnS3nRvEQ+doOx\nAya7HLQtc4hdELfwTLvYbgRciCVCBWCcyfZudIp62rLtnjp0bGZmHBtt6zADxpEH\nD1jVoCSNxOwIp7R3Pvi2LYb37358JwR1RD/U+l3RCQKBgQDt+xQbY58L/0GuYS8T\nQuwI4muNTQM/lEw2AGPkZQgs1vIMkJeFKW9Vn79J6Ej7WBkS3EW2RkMuXbIYhCgO\nCo10Fi7jI0aNTlpko+yCL/rEcuFKR8txOyp1Ljmqe/36XJkpPBdURT3npkyI3cOM\nOginPbxSV6kfoxrQ6XQEDFdJ+QKBgQDl9t3zVJOEzCPs6YXWYX3RdCf/cys1lLdB\nkuQlYFJf8+lOWxRRwC6JrHbvqrFF6cSfLXMwZwFWnIBAxCwiAZ/K9ZPMRtZOjPGF\nPsfOyJrhdX2BEpT80FMm5T6Nm7JT4tvPC5ZIXSkk6RQAcCxmLlEC5UX+N+m3UW1W\nwh7Ti7evlQKBgGd3+MAHykjfDGGS43LOb+1U9EoVJ8pm4dPAy62rt6g3NDn+S8Kb\nx0pFEFhD5CdToGMw3iZn2iG4nwxFuVyRffrxAiXDWpNpc6e6FcRss+zhvc4b9Pog\nLU+Rb4UOL9jAld71v3bmPAoRpckEEldPjB+amdx7PI8CzU/zkHuKGhGRAoGBAKrc\nKfpiK5zuY/7hXsxy8R2PdSxqMH+F+EajUhmnIG0kd4L9TvKSnMEzv8bAhygP0UQH\na99ZmPf2HaCBYNz/Ye9VWTPcqdwBAm3iwGgWSmUbe11MJiBU1INArqJePTfwhSqn\nTEiF100SVAcjUQm2fgBtwvxoJKFMwbVFU8wPsjGlAoGBANjHr0/OXwKFvGc0S3Ec\nIH3vFQomlIUtv48AlFP3senH/zfwarUPa6kert/uufGbEkBAGK0asohUCOB2trBi\ncIz4TFgNNo/PTPwDWSK1fc5nBfoBUWDXz8lwf6aHNKjodOKDQMomRiHmnW2Hu225\n3YVBsyVM+mI+6kIl1CadpTeR\n-----END PRIVATE KEY-----\n",
+  "client_email": "calendar-middleware@atmanclinic.iam.gserviceaccount.com",
+  "client_id": "112616290570534226867",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/calendar-middleware%40atmanclinic.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

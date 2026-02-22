@@ -4,7 +4,7 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 import requests
 from fastapi import FastAPI, HTTPException
@@ -12,6 +12,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 try:
+    # Python 3.9+
     from zoneinfo import ZoneInfo
 except Exception:  # pragma: no cover
     ZoneInfo = None  # type: ignore
@@ -28,31 +29,29 @@ class Settings:
     third_party_password: str = os.getenv("THIRD_PARTY_PASSWORD", "")
     google_calendar_id: str = os.getenv("GOOGLE_CALENDAR_ID", "")
     google_credentials_file: str = os.getenv("GOOGLE_CREDENTIALS_FILE", "")
-    source_timezone: str = os.getenv("SOURCE_TIMEZONE", "Europe/London")
-
-    # Pagination / scan controls (safe defaults)
-    third_party_page_size: int = int(os.getenv("THIRD_PARTY_PAGE_SIZE", "30"))
-    third_party_max_pages: int = int(os.getenv("THIRD_PARTY_MAX_PAGES", "200"))
-
-    # Stop scanning once we’ve found this many eligible (today-forward) appts
-    scan_target_matches: int = int(os.getenv("SCAN_TARGET_MATCHES", "200"))
+    # Clinic/source timezone for naive datetimes from Clinicoffice (adjust if needed)
+    source_timezone: str = os.getenv("SOURCE_TIMEZONE", "America/New_York")
 
 
 def _is_placeholder(dt_str: Any) -> bool:
     return isinstance(dt_str, str) and dt_str.startswith("0001-01-01")
 
 
-def _attach_tz_if_naive(dt: datetime, source_tz: str) -> datetime:
-    if dt.tzinfo is not None:
-        return dt
-    if ZoneInfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.replace(tzinfo=ZoneInfo(source_tz))
-
-
 def _to_rfc3339(dt_str: str, source_tz: str) -> str:
+    """
+    Convert ISO datetime string to RFC3339 with timezone.
+    - If dt_str already includes timezone, keep it.
+    - If dt_str is naive, attach SOURCE_TIMEZONE.
+    """
     dt = datetime.fromisoformat(dt_str)
-    dt = _attach_tz_if_naive(dt, source_tz)
+
+    if dt.tzinfo is None:
+        if ZoneInfo is None:
+            # Fallback: assume UTC if zoneinfo unavailable
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.replace(tzinfo=ZoneInfo(source_tz))
+
     return dt.isoformat()
 
 
@@ -64,19 +63,9 @@ class ThirdPartyAppointmentClient:
         self.username = username
         self.password = password
 
-    def _fetch_page(
-        self,
-        page_number: int,
-        page_size: int,
-        updated_since: datetime | None = None,
-    ) -> dict[str, Any]:
+    def get_appointments(self, updated_since: datetime | None = None) -> list[dict[str, Any]]:
         url = f"{self.base_url}/appointments"
-        params: dict[str, str] = {
-            "page_number": str(page_number),
-            "page_size": str(page_size),
-        }
-
-        # Even if the API ignores it, keep it here in case it starts working later
+        params: dict[str, str] = {}
         if updated_since:
             params["updated_since"] = updated_since.astimezone(timezone.utc).isoformat()
 
@@ -87,55 +76,19 @@ class ThirdPartyAppointmentClient:
             timeout=30,
         )
         response.raise_for_status()
+
         payload = response.json()
-        if not isinstance(payload, dict):
-            # Clinicoffice returns a dict wrapper; keep this strict to catch unexpected changes
-            raise ValueError(f"Expected object wrapper from third-party API, got {type(payload)}")
-        return payload
 
-    def iter_appointments(
-        self,
-        updated_since: datetime | None = None,
-        max_pages: int = 200,
-        page_size: int = 30,
-    ):
-        """
-        Yields raw appointment dicts across pages.
-
-        Strategy:
-        - Fetch page 1 to read page_count.
-        - Scan only a window near the end (newest pages): last `max_pages` pages.
-        """
-
-        # Fetch page 1 to get page_count
-        first = self._fetch_page(page_number=1, page_size=page_size, updated_since=updated_since)
-        page_count = first.get("page_count")
-
-        if isinstance(page_count, int) and page_count >= 1:
-            start_page = max(1, page_count - max_pages + 1)
-            end_page = page_count
+        # Clinicoffice returns an object wrapper: {"code":0,"msg":"Success","data":[...]}
+        if isinstance(payload, dict) and "data" in payload:
+            appointments = payload.get("data") or []
         else:
-            # Fallback: scan from the beginning if page_count isn't present
-            start_page = 1
-            end_page = max_pages
+            appointments = payload
 
-        for page_number in range(start_page, end_page + 1):
-            payload = self._fetch_page(
-                page_number=page_number,
-                page_size=page_size,
-                updated_since=updated_since,
-            )
+        if not isinstance(appointments, list):
+            raise ValueError(f"Expected appointment list from third-party API, got {type(appointments)}")
 
-            data = payload.get("data") or []
-            if not isinstance(data, list):
-                raise ValueError("Expected 'data' list from third-party API")
-
-            # Some pages may exist but contain only placeholders; still yield what we can
-            for item in data:
-                if isinstance(item, dict):
-                    yield item
-
-        return
+        return appointments
 
 
 class GoogleCalendarService:
@@ -201,7 +154,17 @@ class SyncService:
             calendar_id=settings.google_calendar_id,
         )
 
-    def _normalize(self, raw: dict[str, Any]) -> Optional[dict[str, Any]]:
+    def _normalize(self, raw: dict[str, Any]) -> dict[str, Any] | None:
+        """
+        Clinicoffice -> internal schema expected by GoogleCalendarService.create_event:
+        {
+          "id": "...",
+          "title": "...",
+          "description": "...",
+          "start_time": "RFC3339",
+          "end_time": "RFC3339"
+        }
+        """
         appt_id = raw.get("id")
         if not appt_id:
             return None
@@ -211,6 +174,7 @@ class SyncService:
         if not isinstance(start_raw, str) or not isinstance(end_raw, str):
             return None
 
+        # Skip placeholder "0001-01-01" rows
         if _is_placeholder(start_raw) or _is_placeholder(end_raw):
             return None
 
@@ -226,50 +190,35 @@ class SyncService:
         }
 
     def sync_appointments(self, updated_since: datetime | None = None) -> dict[str, int]:
-        # Interpret naive updated_since as SOURCE_TIMEZONE
-        if updated_since:
-            updated_since = _attach_tz_if_naive(updated_since, self.settings.source_timezone)
-
-        fetched = 0
+        raw_appointments = self.third_party_client.get_appointments(updated_since=updated_since)
         synced = 0
         skipped = 0
-        matched = 0
+        normalized: list[dict[str, Any]] = []
 
-        for raw in self.third_party_client.iter_appointments(
-            updated_since=updated_since,
-            max_pages=self.settings.third_party_max_pages,
-            page_size=self.settings.third_party_page_size,
-        ):
-            fetched += 1
+        for raw in raw_appointments:
+            if not isinstance(raw, dict):
+                skipped += 1
+                continue
+            n = self._normalize(raw)
+            if not n:
+                skipped += 1
+                continue
+            normalized.append(n)
 
-            norm = self._normalize(raw)
-            if not norm:
+        for appointment in normalized:
+            appointment_id = str(appointment.get("id", ""))
+            if not appointment_id:
                 skipped += 1
                 continue
 
-            # Today-forward filter based on start_time
-            if updated_since:
-                start_dt = datetime.fromisoformat(norm["start_time"])
-                start_dt = _attach_tz_if_naive(start_dt, self.settings.source_timezone)
-                if start_dt < updated_since:
-                    skipped += 1
-                    continue
-
-            matched += 1
-
-            appt_id = norm["id"]
-            if self.google_calendar.event_exists(appt_id):
+            if self.google_calendar.event_exists(appointment_id):
                 skipped += 1
                 continue
 
-            self.google_calendar.create_event(norm)
+            self.google_calendar.create_event(appointment)
             synced += 1
 
-            # Safety: stop scanning once we’ve found enough eligible future appts
-            if matched >= self.settings.scan_target_matches:
-                break
-
-        return {"fetched": fetched, "synced": synced, "skipped": skipped}
+        return {"fetched": len(raw_appointments), "synced": synced, "skipped": skipped}
 
 
 app = FastAPI(title="Appointment to Google Calendar Middleware")
@@ -296,39 +245,6 @@ def sync(updated_since: str | None = None) -> dict[str, int]:
         raise HTTPException(status_code=502, detail="Failed to fetch appointments") from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=500, detail="Google credentials file was not found") from exc
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("Unexpected sync error")
-        raise HTTPException(status_code=500, detail="Sync failed") from exc
-
-    return result
-
-@app.post("/sync/today")
-def sync_today() -> dict[str, int]:
-    """
-    Sync appointments starting from today's midnight
-    in SOURCE_TIMEZONE (e.g., Europe/London).
-    """
-
-    # Determine timezone
-    if ZoneInfo is None:
-        tz = timezone.utc
-    else:
-        tz = ZoneInfo(settings.source_timezone)
-
-    now = datetime.now(tz)
-    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    try:
-        service = SyncService(settings)
-        result = service.sync_appointments(updated_since=midnight)
-    except requests.RequestException as exc:
-        logger.exception("Third-party API error")
-        raise HTTPException(status_code=502, detail="Failed to fetch appointments") from exc
-    except FileNotFoundError as exc:
-        raise HTTPException(
-            status_code=500,
-            detail="Google credentials file was not found",
-        ) from exc
     except Exception as exc:  # noqa: BLE001
         logger.exception("Unexpected sync error")
         raise HTTPException(status_code=500, detail="Sync failed") from exc
